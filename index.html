@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <title>Lampochka ip va switch bilan</title>
+  <style>
+    body {
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+      font-family: sans-serif;
+      color: #eee;
+      transition: background 0.8s ease, color 0.8s ease;
+    }
+    body.light-on {
+      background: #f7e27d;
+      color: #222;
+    }
+
+    .lamp {
+      position: relative;
+      width: 100px;
+      height: 220px;
+      margin-bottom: 40px;
+    }
+    .bulb {
+      width: 100px;
+      height: 100px;
+      background: #333;
+      border-radius: 50%;
+      margin: 0 auto;
+      box-shadow: none;
+    }
+    .bulb.on {
+      animation: warmUp 1s forwards;
+    }
+    .bulb.off {
+      animation: coolDown 1s forwards;
+    }
+
+    @keyframes warmUp {
+      0%   { background: #400; box-shadow: 0 0 5px #400; }
+      30%  { background: #a30; box-shadow: 0 0 15px #a30; }
+      60%  { background: #e90; box-shadow: 0 0 25px #e90; }
+      100% { background: yellow; box-shadow: 0 0 40px yellow; }
+    }
+    @keyframes coolDown {
+      0%   { background: yellow; box-shadow: 0 0 40px yellow; }
+      40%  { background: #e90; box-shadow: 0 0 25px #e90; }
+      70%  { background: #a30; box-shadow: 0 0 15px #a30; }
+      100% { background: #333; box-shadow: none; }
+    }
+
+    .rope {
+      width: 4px;
+      height: 100px;
+      background: #aaa;
+      margin: 0 auto;
+      position: relative;
+      transition: height 0.2s ease;
+    }
+    .handle {
+      width: 20px;
+      height: 20px;
+      background: #666;
+      border-radius: 50%;
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      cursor: grab;
+      transition: bottom 0.2s ease;
+      touch-action: none;
+    }
+    .handle.dragging {
+      cursor: grabbing;
+    }
+
+    @keyframes swing {
+      0%   { transform: translateX(-50%) rotate(0deg); }
+      20%  { transform: translateX(-50%) rotate(10deg); }
+      40%  { transform: translateX(-50%) rotate(-8deg); }
+      60%  { transform: translateX(-50%) rotate(6deg); }
+      80%  { transform: translateX(-50%) rotate(-3deg); }
+      100% { transform: translateX(-50%) rotate(0deg); }
+    }
+    .handle.swing {
+      animation: swing 0.6s ease-out;
+    }
+
+    /* Switch */
+    .switch-plate {
+      width: 60px;
+      height: 100px;
+      background: #ccc;
+      border-radius: 8px;
+      box-shadow: 0 0 10px #0005 inset;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .switch-toggle {
+      width: 30px;
+      height: 60px;
+      background: #666;
+      border-radius: 4px;
+      position: relative;
+      transition: background 0.3s;
+    }
+    .switch-toggle::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 50%;
+      background: #eee;
+      border-radius: 4px;
+      transition: top 0.3s;
+    }
+    .switch-toggle.off::after { top: 0; }
+    .switch-toggle.on::after { top: 50%; }
+  </style>
+</head>
+<body>
+  <div class="lamp">
+    <div class="bulb" id="bulb"></div>
+    <div class="rope" id="rope">
+      <div class="handle" id="handle"></div>
+    </div>
+  </div>
+
+  <div class="switch-plate" id="switchBtn">
+    <div class="switch-toggle off" id="switchToggle"></div>
+  </div>
+
+  <p>Ipni torting yoki switchni bosing → lampochka asta qizib yonadi/o‘chadi</p>
+
+  <!-- 🔊 Ovozlar -->
+  <audio id="clickOn" src="https://www.soundjay.com/buttons/sounds/button-16.mp3" preload="auto"></audio>
+  <audio id="clickOff" src="https://www.soundjay.com/buttons/sounds/button-09.mp3" preload="auto"></audio>
+  <audio id="stretchSound" src="https://www.soundjay.com/mechanical/sounds/spring-stretch-1.mp3" preload="auto" loop></audio>
+
+  <script>
+    const bulb = document.getElementById("bulb");
+    const rope = document.getElementById("rope");
+    const handle = document.getElementById("handle");
+    const switchBtn = document.getElementById("switchBtn");
+    const switchToggle = document.getElementById("switchToggle");
+
+    const clickOn = document.getElementById("clickOn");
+    const clickOff = document.getElementById("clickOff");
+    const stretchSound = document.getElementById("stretchSound");
+
+    let startY = 0;
+    let isDragging = false;
+    let isOn = false;
+
+    function playClickSound(state) {
+      if (state) { clickOn.currentTime = 0; clickOn.play(); }
+      else { clickOff.currentTime = 0; clickOff.play(); }
+    }
+
+    function updateLamp(state) {
+      if (isOn === state) return;
+      isOn = state;
+
+      bulb.classList.remove("on", "off");
+      bulb.classList.add(isOn ? "on" : "off");
+      document.body.classList.toggle("light-on", isOn);
+      switchToggle.classList.toggle("on", isOn);
+      switchToggle.classList.toggle("off", !isOn);
+
+      playClickSound(isOn);
+    }
+
+    function startDrag(y) {
+      isDragging = true;
+      startY = y;
+      rope.style.transition = "none";
+      handle.style.transition = "none";
+      handle.classList.add("dragging");
+      stretchSound.currentTime = 0;
+      stretchSound.play();
+    }
+
+    function moveDrag(y) {
+      if (!isDragging) return;
+      let diff = y - startY;
+      if (diff > 0 && diff < 80) {
+        rope.style.height = 100 + diff + "px";
+        handle.style.bottom = -20 - diff + "px";
+      }
+    }
+
+    function endDrag(y) {
+      if (!isDragging) return;
+      isDragging = false;
+      handle.classList.remove("dragging");
+
+      rope.style.transition = "height 0.2s ease";
+      handle.style.transition = "bottom 0.2s ease";
+      rope.style.height = "100px";
+      handle.style.bottom = "-20px";
+
+      stretchSound.pause();
+      stretchSound.currentTime = 0;
+
+      let diff = y - startY;
+      if (diff > 50) {
+        updateLamp(!isOn);
+        handle.classList.remove("swing");
+        void handle.offsetWidth;
+        handle.classList.add("swing");
+      }
+    }
+
+    handle.addEventListener("mousedown", e => startDrag(e.clientY));
+    document.addEventListener("mousemove", e => moveDrag(e.clientY));
+    document.addEventListener("mouseup", e => endDrag(e.clientY));
+
+    handle.addEventListener("touchstart", e => startDrag(e.touches[0].clientY));
+    document.addEventListener("touchmove", e => moveDrag(e.touches[0].clientY));
+    document.addEventListener("touchend", e => endDrag(e.changedTouches[0].clientY));
+
+    switchBtn.addEventListener("click", () => {
+      updateLamp(!isOn);
+    });
+  </script>
+</body>
+</html>
